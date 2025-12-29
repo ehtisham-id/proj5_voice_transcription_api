@@ -5,53 +5,252 @@
     <meta charset="UTF-8" />
     <title>Voice Transcription App</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-
-    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Socket.io client -->
     <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+    <link href="https://unpkg.com/aos@2.3.1/dist/aos.css" rel="stylesheet">
+    <script src="https://unpkg.com/aos@2.3.1/dist/aos.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        body {
+            background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+            min-height: 100vh;
+        }
+
+        .card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+
+        .card:hover {
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            transition: all 0.3s ease;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(102, 126, 234, 0.4);
+        }
+
+        .btn-success {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+        }
+
+        .btn-success:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(56, 239, 125, 0.4);
+        }
+
+        .btn-danger {
+            background: linear-gradient(135deg, #eb3349 0%, #f45c43 100%);
+            color: white;
+        }
+
+        .btn-danger:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(235, 51, 73, 0.4);
+        }
+
+        .btn-warning {
+            background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+            color: white;
+        }
+
+        .btn-warning:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(245, 87, 108, 0.4);
+        }
+
+        .btn-secondary {
+            background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%);
+            color: white;
+        }
+
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 20px rgba(79, 172, 254, 0.4);
+        }
+
+        .input-field {
+            border: 2px solid #e2e8f0;
+            transition: all 0.3s ease;
+        }
+
+        .input-field:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+
+        .recording-pulse {
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+
+            0%,
+            100% {
+                box-shadow: 0 0 0 0 rgba(245, 87, 108, 0.7);
+            }
+
+            50% {
+                box-shadow: 0 0 0 15px rgba(245, 87, 108, 0);
+            }
+        }
+
+        .spinner {
+            border: 3px solid #f3f4f6;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+
+        .toast {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            z-index: 1000;
+            animation: slideIn 0.3s ease-out;
+            max-width: 90%;
+        }
+
+        @keyframes slideIn {
+            from {
+                transform: translateX(400px);
+                opacity: 0;
+            }
+
+            to {
+                transform: translateX(0);
+                opacity: 1;
+            }
+        }
+
+        .fade-out {
+            animation: fadeOut 0.3s ease-out forwards;
+        }
+
+        @keyframes fadeOut {
+            to {
+                opacity: 0;
+                transform: translateX(400px);
+            }
+        }
+    </style>
 </head>
 
-<body class="bg-gray-100 font-sans">
+<body>
 
-    <div class="max-w-4xl mx-auto p-6">
-        <h1 class="text-3xl font-bold text-center mb-6">🎙 Voice Transcription App</h1>
-
-        <!-- AUTH -->
-        <div id="auth-section" class="bg-white p-6 rounded shadow mb-6">
-            <h2 class="text-xl font-semibold mb-4">Login / Register</h2>
-            <input id="email" type="email" placeholder="Email" class="border p-2 w-full mb-2 rounded" />
-            <input id="password" type="password" placeholder="Password" class="border p-2 w-full mb-4 rounded" />
-            <div class="flex gap-3">
-                <button id="registerBtn"
-                    class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Register</button>
-                <button id="loginBtn"
-                    class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Login</button>
-            </div>
-            <p id="auth-msg" class="mt-2 text-red-500"></p>
+    <div class="container mx-auto px-4 py-6 max-w-6xl">
+        <div class="text-center mb-8" data-aos="fade-down">
+            <h1 class="text-4xl md:text-5xl font-bold text-gray-800 mb-2">🎙️ Voice Transcription</h1>
+            <p class="text-gray-600">Transform your audio into text instantly</p>
         </div>
 
-        <!-- TRANSCRIPTION -->
-        <div id="transcription-section" class="hidden bg-white p-6 rounded shadow mb-6">
-            <div class="flex justify-between items-center mb-4">
-                <h2 class="text-xl font-semibold">Upload / Record Audio</h2>
-                <button id="logoutBtn" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Logout</button>
+        <!-- AUTH SECTION -->
+        <div id="auth-section" class="card p-6 md:p-8 max-w-md mx-auto" data-aos="fade-up">
+            <h2 class="text-2xl font-bold text-gray-800 mb-6">Welcome Back</h2>
+            <input id="email" type="email" placeholder="Email Address"
+                class="input-field p-3 w-full mb-4 rounded-lg text-gray-800" />
+            <input id="password" type="password" placeholder="Password"
+                class="input-field p-3 w-full mb-6 rounded-lg text-gray-800" />
+            <div class="grid grid-cols-2 gap-3">
+                <button id="loginBtn" class="btn-primary px-6 py-3 rounded-lg font-semibold">
+                    Login
+                </button>
+                <button id="registerBtn" class="btn-success px-6 py-3 rounded-lg font-semibold">
+                    Register
+                </button>
             </div>
-            <input type="file" id="audioFile" accept="audio/*" class="mb-3" />
-            <div class="flex gap-2 mb-4">
-                <button id="uploadBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">Upload &
-                    Transcribe</button>
-                <button id="recordBtn" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Start
-                    Recording</button>
-                <button id="stopBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Stop</button>
-            </div>
-            <p id="status-msg" class="text-gray-700"></p>
+            <p id="auth-msg" class="mt-4 text-red-600 text-center text-sm"></p>
         </div>
 
-        <!-- TRANSCRIPTION LIST -->
-        <div id="transcriptions-list" class="hidden bg-white p-6 rounded shadow">
-            <h2 class="text-xl font-semibold mb-4">Your Transcriptions</h2>
-            <ul id="transcriptions" class="space-y-3"></ul>
+        <!-- TRANSCRIPTION SECTION -->
+        <div id="transcription-section" class="hidden" data-aos="fade-up">
+            <div class="card p-6 md:p-8 mb-6">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4">
+                    <div>
+                        <h2 class="text-2xl font-bold text-gray-800">Audio Controls</h2>
+                        <p class="text-gray-600 text-sm mt-1">Upload a file or record directly</p>
+                    </div>
+                    <button id="logoutBtn" class="btn-danger px-5 py-2 rounded-lg font-semibold text-sm">
+                        Logout
+                    </button>
+                </div>
+
+                <div class="bg-gray-50 rounded-xl p-5 mb-5">
+                    <label class="block text-gray-700 mb-3 font-semibold">📁 Upload Audio File</label>
+                    <input type="file" id="audioFile" accept="audio/*"
+                        class="w-full text-gray-700 file:mr-4 file:py-2 file:px-4 file:rounded-lg file:border-0 file:bg-gradient-to-r file:from-purple-500 file:to-purple-600 file:text-white file:font-semibold file:cursor-pointer hover:file:from-purple-600 hover:file:to-purple-700" />
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                    <button id="uploadBtn"
+                        class="btn-primary px-6 py-4 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        Upload
+                    </button>
+                    <button id="recordBtn"
+                        class="btn-warning px-6 py-4 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M19 11a7 7 0 01-7 7m0 0a7 7 0 01-7-7m7 7v4m0 0H8m4 0h4m-4-8a3 3 0 01-3-3V5a3 3 0 116 0v6a3 3 0 01-3 3z" />
+                        </svg>
+                        Record
+                    </button>
+                    <button id="stopBtn"
+                        class="btn-danger px-6 py-4 rounded-lg font-semibold flex items-center justify-center gap-2">
+                        <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 24 24">
+                            <rect x="6" y="6" width="12" height="12" rx="2" />
+                        </svg>
+                        Stop
+                    </button>
+                </div>
+
+                <div id="status-container" class="hidden bg-blue-50 border-l-4 border-blue-500 rounded-lg p-4">
+                    <div class="flex items-center gap-3">
+                        <div class="spinner"></div>
+                        <p id="status-msg" class="text-blue-800 font-medium"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TRANSCRIPTIONS LIST -->
+            <div id="transcriptions-list" class="hidden">
+                <div class="flex items-center justify-between mb-5">
+                    <h2 class="text-2xl font-bold text-gray-800">📝 Your Transcriptions</h2>
+                    <span id="count-badge"
+                        class="bg-purple-100 text-purple-800 px-4 py-2 rounded-full font-semibold text-sm"></span>
+                </div>
+                <div id="transcriptions" class="space-y-4"></div>
+            </div>
         </div>
     </div>
 
@@ -69,6 +268,8 @@
         const passwordInput = document.getElementById("password");
         const authMsg = document.getElementById("auth-msg");
         const statusMsg = document.getElementById("status-msg");
+        const statusContainer = document.getElementById("status-container");
+        const countBadge = document.getElementById("count-badge");
         const registerBtn = document.getElementById("registerBtn");
         const loginBtn = document.getElementById("loginBtn");
         const logoutBtn = document.getElementById("logoutBtn");
@@ -77,11 +278,47 @@
         const stopBtn = document.getElementById("stopBtn");
         const audioFile = document.getElementById("audioFile");
 
+        AOS.init({ duration: 600, once: true });
+
+        /* ---------------- TOAST ---------------- */
+        function showToast(message, type = 'info') {
+            const colors = {
+                success: 'bg-green-500',
+                error: 'bg-red-500',
+                info: 'bg-blue-500',
+                warning: 'bg-yellow-500'
+            };
+
+            const toast = document.createElement('div');
+            toast.className = `toast ${colors[type]} text-white rounded-lg p-4 shadow-lg`;
+            toast.innerHTML = `
+                <div class="flex items-center gap-3">
+                    <span class="font-medium">${message}</span>
+                </div>
+            `;
+            document.body.appendChild(toast);
+            setTimeout(() => {
+                toast.classList.add('fade-out');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        /* ---------------- STATUS ---------------- */
+        function setStatus(message, show = true) {
+            statusMsg.textContent = message;
+            statusContainer.classList.toggle('hidden', !show);
+        }
+
         /* ---------------- AUTH ---------------- */
         async function auth(endpoint) {
             try {
-                const email = emailInput.value;
+                const email = emailInput.value.trim();
                 const password = passwordInput.value;
+
+                if (!email || !password) {
+                    authMsg.textContent = "Please fill all fields";
+                    return;
+                }
 
                 const res = await fetch(`${API_URL}/auth/${endpoint}`, {
                     method: "POST",
@@ -97,6 +334,8 @@
 
                 initSocket();
                 showTranscriptionSection();
+                showToast(`${endpoint === 'login' ? 'Logged in' : 'Registered'} successfully!`, 'success');
+                authMsg.textContent = "";
             } catch (err) {
                 authMsg.textContent = err.message;
             }
@@ -112,18 +351,43 @@
             authSection.classList.remove("hidden");
             transcriptionSection.classList.add("hidden");
             transcriptionsList.classList.add("hidden");
+            showToast("Logged out successfully", "info");
         };
 
         /* ---------------- SOCKET ---------------- */
         function initSocket() {
-            socket = io(API_URL, { auth: { token } });
+            if (socket) socket.disconnect();
+
+            socket = io(API_URL, {
+                auth: { token },
+                transports: ['websocket', 'polling']
+            });
+
             const payload = parseJwt(token);
             if (!payload) return;
+
             socket.emit("join", { userId: payload.sub });
 
             socket.on("transcription-status", data => {
-                statusMsg.textContent = data.status;
-                if (data.refresh) fetchTranscriptions(); // refresh list on completion
+                console.log("Socket status received:", data);
+                setStatus(data.status);
+
+                if (data.refresh) {
+                    console.log("Refreshing transcriptions...");
+                    setTimeout(() => {
+                        fetchTranscriptions();
+                        setStatus("", false);
+                        showToast("Transcription completed!", "success");
+                    }, 500);
+                }
+            });
+
+            socket.on("connect", () => {
+                console.log("Socket connected");
+            });
+
+            socket.on("connect_error", (err) => {
+                console.error("Socket connection error:", err);
             });
         }
 
@@ -143,112 +407,215 @@
             fetchTranscriptions();
         }
 
+        /* ---------------- API ERROR HANDLER ---------------- */
+        async function handleApiError(res) {
+            if (res.status === 401) {
+                showToast("Session expired. Please login again.", "error");
+                setTimeout(() => logoutBtn.click(), 1000);
+                return true;
+            }
+            return false;
+        }
+
         /* ---------------- FETCH ---------------- */
         async function fetchTranscriptions() {
             try {
                 const res = await fetch(`${API_URL}/transcriptions`, {
-                    headers: { Authorization: `Bearer ${token}` }
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
                 });
 
+                if (await handleApiError(res)) return;
                 if (!res.ok) throw new Error("Failed to fetch transcriptions");
+
                 const data = await res.json();
-
-                const ul = document.getElementById("transcriptions");
-                ul.innerHTML = "";
-
-                data.forEach(t => {
-                    const li = document.createElement("li");
-                    li.className = "border p-4 rounded bg-gray-50";
-
-                    li.innerHTML = `
-            <div class="flex justify-between items-center mb-2">
-              <div>
-                <strong>${t.fileName || "No File"}</strong>
-                <div class="text-xs text-gray-500">${new Date(t.createdAt).toLocaleString()}</div>
-              </div>
-              <button
-                class="bg-red-500 text-white px-2 py-1 rounded text-sm"
-                onclick="deleteTranscription('${t._id}')">
-                Delete
-              </button>
-            </div>
-            <p class="whitespace-pre-wrap">${t.text}</p>
-          `;
-                    ul.appendChild(li);
-                });
+                console.log("Fetched transcriptions:", data.length);
+                renderTranscriptions(data);
             } catch (err) {
-                statusMsg.textContent = err.message;
+                showToast(err.message, 'error');
             }
+        }
+
+        function renderTranscriptions(data) {
+            const container = document.getElementById("transcriptions");
+            container.innerHTML = "";
+
+            countBadge.textContent = `${data.length} Total`;
+
+            if (data.length === 0) {
+                container.innerHTML = `
+                    <div class="card p-8 text-center">
+                        <div class="text-6xl mb-4">🎤</div>
+                        <p class="text-gray-600 text-lg font-medium">No transcriptions yet</p>
+                        <p class="text-gray-500 text-sm mt-2">Upload or record audio to get started!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            data.forEach((t, index) => {
+                const card = document.createElement("div");
+                card.className = "card p-5 md:p-6";
+                card.setAttribute('data-aos', 'fade-up');
+                card.setAttribute('data-aos-delay', Math.min(index * 50, 300));
+
+                card.innerHTML = `
+                    <div class="flex flex-col md:flex-row justify-between items-start gap-4 mb-4">
+                        <div class="flex-1">
+                            <h3 class="text-lg font-bold text-gray-800 mb-1">🎵 ${t.fileName || "Recording"}</h3>
+                            <p class="text-sm text-gray-500">${new Date(t.createdAt).toLocaleString()}</p>
+                        </div>
+                        <div class="flex gap-2">
+                            <button onclick="copyText('${t._id}')" 
+                                class="btn-secondary px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                                Copy
+                            </button>
+                            <button onclick="deleteTranscription('${t._id}')"
+                                class="btn-danger px-4 py-2 rounded-lg text-sm font-semibold flex items-center gap-2">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                </svg>
+                                Delete
+                            </button>
+                        </div>
+                    </div>
+                    <div class="bg-gray-50 rounded-lg p-4">
+                        <p id="text-${t._id}" class="text-gray-800 whitespace-pre-wrap leading-relaxed">${t.text}</p>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+            AOS.refresh();
+        }
+
+        /* ---------------- COPY ---------------- */
+        function copyText(id) {
+            const text = document.getElementById(`text-${id}`).textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                showToast("Copied to clipboard!", "success");
+            });
         }
 
         /* ---------------- DELETE ---------------- */
         async function deleteTranscription(id) {
-            if (!confirm("Delete transcription?")) return;
+            if (!confirm("Delete this transcription?")) return;
 
-            const res = await fetch(`${API_URL}/transcriptions/${id}`, {
-                method: "DELETE",
-                headers: { Authorization: `Bearer ${token}` }
-            });
+            try {
+                const res = await fetch(`${API_URL}/transcriptions/${id}`, {
+                    method: "DELETE",
+                    headers: {
+                        Authorization: `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    }
+                });
 
-            if (!res.ok) return statusMsg.textContent = "Failed to delete";
-            fetchTranscriptions();
+                if (await handleApiError(res)) return;
+                if (!res.ok) throw new Error("Failed to delete");
+
+                fetchTranscriptions();
+                showToast("Transcription deleted", "info");
+            } catch (err) {
+                showToast(err.message, 'error');
+            }
         }
 
         /* ---------------- UPLOAD ---------------- */
         uploadBtn.onclick = async () => {
-            if (!audioFile.files.length) return alert("Select an audio file");
+            if (!audioFile.files.length) {
+                showToast("Please select an audio file", "error");
+                return;
+            }
 
             const fd = new FormData();
             fd.append("file", audioFile.files[0]);
 
-            statusMsg.textContent = "Uploading...";
-            const res = await fetch(`${API_URL}/transcriptions/upload`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-                body: fd
-            });
+            setStatus("Uploading and processing...");
+            try {
+                const res = await fetch(`${API_URL}/transcriptions/upload`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: fd
+                });
 
-            if (!res.ok) {
-                const data = await res.json();
-                return statusMsg.textContent = data.message || "Upload failed";
+                if (await handleApiError(res)) return;
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.message || "Upload failed");
+                }
+
+                audioFile.value = "";
+                showToast("Upload started! Processing...", "info");
+            } catch (err) {
+                setStatus("", false);
+                showToast(err.message, 'error');
             }
         };
 
         /* ---------------- RECORD ---------------- */
         recordBtn.onclick = async () => {
-            audioChunks = [];
-            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+            try {
+                audioChunks = [];
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
 
-            mediaRecorder = new MediaRecorder(stream);
-            mediaRecorder.start();
-            statusMsg.textContent = "Recording...";
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.start();
 
-            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-            mediaRecorder.onstop = uploadRecording;
+                recordBtn.classList.add('recording-pulse');
+                recordBtn.disabled = true;
+                setStatus("🔴 Recording in progress...");
+
+                mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+                mediaRecorder.onstop = uploadRecording;
+            } catch (err) {
+                showToast("Microphone access denied", "error");
+            }
         };
 
-        stopBtn.onclick = () => mediaRecorder?.stop();
+        stopBtn.onclick = () => {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                recordBtn.classList.remove('recording-pulse');
+                recordBtn.disabled = false;
+                mediaRecorder.stream.getTracks().forEach(track => track.stop());
+            }
+        };
 
         async function uploadRecording() {
             const blob = new Blob(audioChunks, { type: "audio/wav" });
             const fd = new FormData();
             fd.append("file", blob, `recording-${Date.now()}.wav`);
 
-            statusMsg.textContent = "Uploading recording...";
-            const res = await fetch(`${API_URL}/transcriptions/upload`, {
-                method: "POST",
-                headers: { Authorization: `Bearer ${token}` },
-                body: fd
-            });
+            setStatus("Uploading recording...");
+            try {
+                const res = await fetch(`${API_URL}/transcriptions/upload`, {
+                    method: "POST",
+                    headers: { Authorization: `Bearer ${token}` },
+                    body: fd
+                });
 
-            if (!res.ok) {
-                const data = await res.json();
-                return statusMsg.textContent = data.message || "Upload failed";
+                if (await handleApiError(res)) return;
+                if (!res.ok) {
+                    const data = await res.json();
+                    throw new Error(data.message || "Upload failed");
+                }
+
+                showToast("Recording uploaded! Processing...", "info");
+            } catch (err) {
+                setStatus("", false);
+                showToast(err.message, 'error');
             }
         }
 
         /* ---------------- INIT ---------------- */
-        if (token) initSocket();
+        if (token) {
+            initSocket();
+            showTranscriptionSection();
+        }
     </script>
 </body>
 

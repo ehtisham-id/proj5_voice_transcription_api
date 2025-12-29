@@ -17,14 +17,11 @@ export class EmailService {
     });
   }
 
-  async sendTranscription(
-    transcription: string,
-    to: string = process.env.DUMMY_EMAIL_TO,
-  ) {
+  async sendTranscription(transcription: string, to: string) {
     try {
       await this.transporter.sendMail({
-        from: process.env.EMAIL_FROM,
-        to,
+        from: process.env.EMAIL_USER,
+        to: process.env.DUMMY_EMAIL_TO || to,
         subject: 'Welcome to Transcription Service',
         text: transcription,
       });

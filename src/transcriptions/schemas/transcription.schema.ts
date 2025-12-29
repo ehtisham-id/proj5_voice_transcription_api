@@ -6,13 +6,13 @@ export type TranscriptionDocument = Transcription & Document;
 @Schema({ timestamps: true })
 export class Transcription {
   @Prop({ required: true })
-  text: string;
+  userId: string; // Must match the field name here
 
-  @Prop({ required: true, index: true })
-  userId: string;
+  @Prop({ required: true })
+  fileName: string; // Must match the field name here
 
   @Prop()
-  audioFile?: string;
+  text?: string; // Optional
 }
 
 export const TranscriptionSchema = SchemaFactory.createForClass(Transcription);

@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <title>Voice Transcription App</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Socket.io client -->
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
+</head>
+
+<body class="bg-gray-100 font-sans">
+
+    <div class="max-w-4xl mx-auto p-6">
+        <h1 class="text-3xl font-bold text-center mb-6">🎙 Voice Transcription App</h1>
+
+        <!-- AUTH -->
+        <div id="auth-section" class="bg-white p-6 rounded shadow mb-6">
+            <h2 class="text-xl font-semibold mb-4">Login / Register</h2>
+            <input id="email" type="email" placeholder="Email" class="border p-2 w-full mb-2 rounded" />
+            <input id="password" type="password" placeholder="Password" class="border p-2 w-full mb-4 rounded" />
+            <div class="flex gap-3">
+                <button id="registerBtn"
+                    class="bg-blue-500 text-white px-4 py-2 rounded hover:bg-blue-600">Register</button>
+                <button id="loginBtn"
+                    class="bg-green-500 text-white px-4 py-2 rounded hover:bg-green-600">Login</button>
+            </div>
+            <p id="auth-msg" class="mt-2 text-red-500"></p>
+        </div>
+
+        <!-- TRANSCRIPTION -->
+        <div id="transcription-section" class="hidden bg-white p-6 rounded shadow mb-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-semibold">Upload / Record Audio</h2>
+                <button id="logoutBtn" class="bg-red-500 text-white px-3 py-1 rounded hover:bg-red-600">Logout</button>
+            </div>
+            <input type="file" id="audioFile" accept="audio/*" class="mb-3" />
+            <div class="flex gap-2 mb-4">
+                <button id="uploadBtn" class="bg-purple-500 text-white px-4 py-2 rounded hover:bg-purple-600">Upload &
+                    Transcribe</button>
+                <button id="recordBtn" class="bg-yellow-500 text-white px-4 py-2 rounded hover:bg-yellow-600">Start
+                    Recording</button>
+                <button id="stopBtn" class="bg-red-500 text-white px-4 py-2 rounded hover:bg-red-600">Stop</button>
+            </div>
+            <p id="status-msg" class="text-gray-700"></p>
+        </div>
+
+        <!-- TRANSCRIPTION LIST -->
+        <div id="transcriptions-list" class="hidden bg-white p-6 rounded shadow">
+            <h2 class="text-xl font-semibold mb-4">Your Transcriptions</h2>
+            <ul id="transcriptions" class="space-y-3"></ul>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://localhost:3000";
+        let token = localStorage.getItem("access_token");
+        let mediaRecorder;
+        let audioChunks = [];
+        let socket;
+
+        const authSection = document.getElementById("auth-section");
+        const transcriptionSection = document.getElementById("transcription-section");
+        const transcriptionsList = document.getElementById("transcriptions-list");
+        const emailInput = document.getElementById("email");
+        const passwordInput = document.getElementById("password");
+        const authMsg = document.getElementById("auth-msg");
+        const statusMsg = document.getElementById("status-msg");
+        const registerBtn = document.getElementById("registerBtn");
+        const loginBtn = document.getElementById("loginBtn");
+        const logoutBtn = document.getElementById("logoutBtn");
+        const uploadBtn = document.getElementById("uploadBtn");
+        const recordBtn = document.getElementById("recordBtn");
+        const stopBtn = document.getElementById("stopBtn");
+        const audioFile = document.getElementById("audioFile");
+
+        /* ---------------- AUTH ---------------- */
+        async function auth(endpoint) {
+            try {
+                const email = emailInput.value;
+                const password = passwordInput.value;
+
+                const res = await fetch(`${API_URL}/auth/${endpoint}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ email, password })
+                });
+
+                const data = await res.json();
+                if (!res.ok) throw new Error(data.message || "Auth failed");
+
+                token = data.access_token;
+                localStorage.setItem("access_token", token);
+
+                initSocket();
+                showTranscriptionSection();
+            } catch (err) {
+                authMsg.textContent = err.message;
+            }
+        }
+
+        registerBtn.onclick = () => auth("register");
+        loginBtn.onclick = () => auth("login");
+
+        logoutBtn.onclick = () => {
+            token = null;
+            localStorage.removeItem("access_token");
+            socket?.disconnect();
+            authSection.classList.remove("hidden");
+            transcriptionSection.classList.add("hidden");
+            transcriptionsList.classList.add("hidden");
+        };
+
+        /* ---------------- SOCKET ---------------- */
+        function initSocket() {
+            socket = io(API_URL, { auth: { token } });
+            const payload = parseJwt(token);
+            if (!payload) return;
+            socket.emit("join", { userId: payload.sub });
+
+            socket.on("transcription-status", data => {
+                statusMsg.textContent = data.status;
+                if (data.refresh) fetchTranscriptions(); // refresh list on completion
+            });
+        }
+
+        function parseJwt(token) {
+            try {
+                return JSON.parse(atob(token.split('.')[1]));
+            } catch {
+                return null;
+            }
+        }
+
+        /* ---------------- UI ---------------- */
+        function showTranscriptionSection() {
+            authSection.classList.add("hidden");
+            transcriptionSection.classList.remove("hidden");
+            transcriptionsList.classList.remove("hidden");
+            fetchTranscriptions();
+        }
+
+        /* ---------------- FETCH ---------------- */
+        async function fetchTranscriptions() {
+            try {
+                const res = await fetch(`${API_URL}/transcriptions`, {
+                    headers: { Authorization: `Bearer ${token}` }
+                });
+
+                if (!res.ok) throw new Error("Failed to fetch transcriptions");
+                const data = await res.json();
+
+                const ul = document.getElementById("transcriptions");
+                ul.innerHTML = "";
+
+                data.forEach(t => {
+                    const li = document.createElement("li");
+                    li.className = "border p-4 rounded bg-gray-50";
+
+                    li.innerHTML = `
+            <div class="flex justify-between items-center mb-2">
+              <div>
+                <strong>${t.fileName || "No File"}</strong>
+                <div class="text-xs text-gray-500">${new Date(t.createdAt).toLocaleString()}</div>
+              </div>
+              <button
+                class="bg-red-500 text-white px-2 py-1 rounded text-sm"
+                onclick="deleteTranscription('${t._id}')">
+                Delete
+              </button>
+            </div>
+            <p class="whitespace-pre-wrap">${t.text}</p>
+          `;
+                    ul.appendChild(li);
+                });
+            } catch (err) {
+                statusMsg.textContent = err.message;
+            }
+        }
+
+        /* ---------------- DELETE ---------------- */
+        async function deleteTranscription(id) {
+            if (!confirm("Delete transcription?")) return;
+
+            const res = await fetch(`${API_URL}/transcriptions/${id}`, {
+                method: "DELETE",
+                headers: { Authorization: `Bearer ${token}` }
+            });
+
+            if (!res.ok) return statusMsg.textContent = "Failed to delete";
+            fetchTranscriptions();
+        }
+
+        /* ---------------- UPLOAD ---------------- */
+        uploadBtn.onclick = async () => {
+            if (!audioFile.files.length) return alert("Select an audio file");
+
+            const fd = new FormData();
+            fd.append("file", audioFile.files[0]);
+
+            statusMsg.textContent = "Uploading...";
+            const res = await fetch(`${API_URL}/transcriptions/upload`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: fd
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                return statusMsg.textContent = data.message || "Upload failed";
+            }
+        };
+
+        /* ---------------- RECORD ---------------- */
+        recordBtn.onclick = async () => {
+            audioChunks = [];
+            const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+            mediaRecorder = new MediaRecorder(stream);
+            mediaRecorder.start();
+            statusMsg.textContent = "Recording...";
+
+            mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+            mediaRecorder.onstop = uploadRecording;
+        };
+
+        stopBtn.onclick = () => mediaRecorder?.stop();
+
+        async function uploadRecording() {
+            const blob = new Blob(audioChunks, { type: "audio/wav" });
+            const fd = new FormData();
+            fd.append("file", blob, `recording-${Date.now()}.wav`);
+
+            statusMsg.textContent = "Uploading recording...";
+            const res = await fetch(`${API_URL}/transcriptions/upload`, {
+                method: "POST",
+                headers: { Authorization: `Bearer ${token}` },
+                body: fd
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                return statusMsg.textContent = data.message || "Upload failed";
+            }
+        }
+
+        /* ---------------- INIT ---------------- */
+        if (token) initSocket();
+    </script>
+</body>
+
+</html>

@@ -1,67 +1,139 @@
-import {
-  Injectable,
-  NotFoundException,
-  ForbiddenException,
-} from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { InjectModel } from '@nestjs/mongoose';
 import { Model } from 'mongoose';
-import { Transcription } from './schemas/transcription.schema';
+import {
+  Transcription,
+  TranscriptionDocument,
+} from './schemas/transcription.schema';
+import * as fs from 'fs';
+import * as path from 'path';
+import axios from 'axios';
 import { RedisService } from '../redis/redis.service';
 import { TranscriptionsGateway } from './transcriptions/transcriptions.gateway';
 
 @Injectable()
 export class TranscriptionsService {
+  private readonly logger = new Logger(TranscriptionsService.name);
+
   constructor(
     @InjectModel(Transcription.name)
-    private readonly transcriptionModel: Model<Transcription>,
+    private transcriptionModel: Model<TranscriptionDocument>,
     private readonly redisService: RedisService,
-    private readonly transcriptionsGateway: TranscriptionsGateway,
+    private readonly gateway: TranscriptionsGateway,
   ) {}
 
-  private cacheKey(transcriptionId: string): string {
-    return `transcription:${transcriptionId}`;
-  }
+  // Upload & transcribe with WebSocket status
+  async uploadAndTranscribe(file: Express.Multer.File, userId: string) {
+    const uploadDir = process.env.UPLOAD_DIR || 'uploads';
+    if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir);
 
-  async create(userId: string, text: string, audioFile?: string) {
-    const transcription = await this.transcriptionModel.create({
-      userId,
-      text,
-      audioFile,
-    });
-    this.transcriptionsGateway.emitCreated(transcription);
+    const timestamp = Date.now();
+    const fileName = `${timestamp}-${file.originalname}`;
+    const filePath = path.join(uploadDir, fileName);
+
+    try {
+      fs.writeFileSync(filePath, file.buffer);
+
+      this.gateway.emitStatus(userId, 'Uploading audio');
+
+      const uploadResp = await axios.post(
+        'https://api.assemblyai.com/v2/upload',
+        fs.createReadStream(filePath),
+        {
+          headers: {
+            authorization: process.env.ASSEMBLYAI_API_KEY,
+            'Content-Type': 'application/octet-stream',
+          },
+        },
+      );
+
+      this.gateway.emitStatus(userId, 'Transcribing audio');
+
+      const transcriptResp = await axios.post(
+        'https://api.assemblyai.com/v2/transcript',
+        { audio_url: uploadResp.data.upload_url },
+        { headers: { authorization: process.env.ASSEMBLYAI_API_KEY } },
+      );
+
+      let text = '';
+      while (true) {
+        const check = await axios.get(
+          `https://api.assemblyai.com/v2/transcript/${transcriptResp.data.id}`,
+          { headers: { authorization: process.env.ASSEMBLYAI_API_KEY } },
+        );
+
+        if (check.data.status === 'completed') {
+          text = check.data.text;
+          break;
+        }
+
+        if (check.data.status === 'error') {
+          throw new Error('Transcription failed');
+        }
+
+        await new Promise((r) => setTimeout(r, 3000));
+      }
+
+      const transcription = await this.transcriptionModel.create({
+        userId,
+        fileName,
+        text,
+      });
+
+      await this.redisService.del(`transcriptions:${userId}`);
+
+      this.gateway.emitStatus(userId, 'Completed');
+
+      return transcription;
+    } catch (err) {
+      this.gateway.emitStatus(userId, 'Failed');
+      this.logger.error(err);
+      throw err;
+    }
   }
 
   async findAll(userId: string) {
-    const cached = await this.redisService.get<Transcription[]>(
-      this.cacheKey(userId),
-    );
+    const cacheKey = `transcriptions:${userId}`;
+    const cached = await this.redisService.get(cacheKey);
     if (cached) return cached;
 
     const data = await this.transcriptionModel
       .find({ userId })
-      .sort({ createdAt: -1 })
-      .exec();
+      .sort({ createdAt: -1 });
 
-    await this.redisService.set(this.cacheKey(userId), data, 60);
+    await this.redisService.set(cacheKey, data, 60);
     return data;
   }
 
   async findOne(id: string, userId: string) {
-    const transcription = await this.transcriptionModel.findById(id);
-    if (!transcription) throw new NotFoundException('Transcription not found');
+    return this.transcriptionModel.findOne({ _id: id, userId });
+  }
 
-    if (transcription.userId !== userId) throw new ForbiddenException();
-
+  async create(userId: string, text: string) {
+    const transcription = await this.transcriptionModel.create({
+      userId,
+      text,
+      fileName: null,
+    });
+    await this.redisService.del(`transcriptions:${userId}`);
     return transcription;
   }
 
   async delete(id: string, userId: string) {
-    const transcription = await this.findOne(id, userId);
-    await transcription.deleteOne();
+    const doc = await this.transcriptionModel.findOne({ _id: id, userId });
+    if (!doc) return null;
 
-    await this.redisService.del(this.cacheKey(userId));
-    this.transcriptionsGateway.emitDeleted(id);
+    // Delete file from uploads folder
+    if (doc.fileName) {
+      const filePath = path.join(
+        process.env.UPLOAD_DIR || 'uploads',
+        doc.fileName,
+      );
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    }
 
-    return { deleted: true };
+    await this.transcriptionModel.deleteOne({ _id: id, userId });
+    await this.redisService.del(`transcriptions:${userId}`);
+    return { success: true };
   }
 }

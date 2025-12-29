@@ -1,16 +1,23 @@
-import { WebSocketServer, WebSocketGateway } from '@nestjs/websockets';
+import {
+  WebSocketGateway,
+  WebSocketServer,
+  SubscribeMessage,
+} from '@nestjs/websockets';
 import { Server } from 'socket.io';
 
-@WebSocketGateway({ cors: { origin: '*' } })
+@WebSocketGateway({
+  cors: { origin: '*' },
+})
 export class TranscriptionsGateway {
   @WebSocketServer()
   server: Server;
 
-  emitCreated(transcription: any) {
-    this.server.emit('transcription.created', transcription);
+  emitStatus(userId: string, status: string) {
+    this.server.to(userId).emit('transcription-status', { status });
   }
 
-  emitDeleted(transcriptionId: string) {
-    this.server.emit('transcription.deleted', { id: transcriptionId });
+  @SubscribeMessage('join')
+  handleJoin(client: any, payload: { userId: string }) {
+    client.join(payload.userId);
   }
 }

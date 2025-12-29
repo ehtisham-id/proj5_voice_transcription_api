@@ -1,5 +1,5 @@
 import { Controller, Get, All, Req, Res } from '@nestjs/common';
-import { AppService } from './app.service'
+import { AppService } from './app.service';
 import { Request, Response } from 'express';
 
 @Controller()
@@ -11,10 +11,10 @@ export class AppController {
     return this.appService.getHello();
   }
 
-  @All('*')
-  handleInvalidRoute(@Req() req: Request, @Res() res: Response) {
-    return res.status(404).json({
-      message: 'Not found',
-    });
-  }
+  // @All('*')
+  // handleInvalidRoute(@Req() req: Request, @Res() res: Response) {
+  //   return res.status(404).json({
+  //     message: 'Not found',
+  //   });
+  // }
 }

@@ -10,14 +10,14 @@ import {
   UseGuards,
   UseInterceptors,
 } from '@nestjs/common';
-import { AuthGuard } from '@nestjs/passport';
+import { JwtGuard } from '../auth/guards/jwt/jwt.guard';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { TranscriptionsService } from './transcriptions.service';
 import { CreateTranscriptionDto } from './dto/create-transcription.dto';
 import { EmailTranscriptionDto } from './dto/email-transcription.dto';
 import { EmailService } from '../email/email.service';
 
-@UseGuards(AuthGuard('jwt'))
+@UseGuards(JwtGuard)
 @Controller('transcriptions')
 export class TranscriptionsController {
   constructor(
@@ -36,23 +36,19 @@ export class TranscriptionsController {
   }
 
   @Get(':id')
-  findOne(@Req() req, @Param('id') id: string) {
-    return this.transcriptionsService.findOne(req.user.id, id);
+  findOne(@Param('id') id: string, @Req() req) {
+    return this.transcriptionsService.findOne(id, req.user.id);
   }
 
   @Delete(':id')
-  delete(@Req() req, @Param('id') id: string) {
+  delete(@Param('id') id: string, @Req() req) {
     return this.transcriptionsService.delete(id, req.user.id);
   }
 
   @Post('upload')
   @UseInterceptors(FileInterceptor('file'))
-  async uploadFile(@Req() req, @UploadedFile() file: Express.Multer.File) {
-    return this.transcriptionsService.create(
-      req.user.id,
-      'Audio transcription pending',
-      file.filename,
-    );
+  async upload(@UploadedFile() file: Express.Multer.File, @Req() req: any) {
+    return this.transcriptionsService.uploadAndTranscribe(file, req.user.id);
   }
 
   @Post(':id/email')
@@ -65,7 +61,7 @@ export class TranscriptionsController {
       id,
       req.user.id,
     );
-
+    if (!transcription) throw new Error('Transcription not found');
     return this.emailService.sendTranscription(dto.email, transcription.text);
   }
 }

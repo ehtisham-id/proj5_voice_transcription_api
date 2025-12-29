@@ -25,8 +25,7 @@ export class AuthService {
       password: hashedPassword,
     });
 
-    // Use virtual 'id' provided by Mongoose
-    return this.signToken(user.id, user.email);
+    return this.signToken(user._id.toString(), user.email);
   }
 
   async login(dto: AuthDto) {
@@ -36,16 +35,14 @@ export class AuthService {
     const passwordValid = await bcrypt.compare(dto.password, user.password);
     if (!passwordValid) throw new UnauthorizedException('Invalid credentials');
 
-    return this.signToken(user.id, user.email);
+    return this.signToken(user._id.toString(), user.email);
   }
 
   private async signToken(userId: string, email: string) {
     const payload = { sub: userId, email };
 
     return {
-      access_token: await this.jwtService.signAsync(payload, {
-        expiresIn: '15m', // or process.env.JWT_EXPIRES_IN
-      }),
+      access_token: await this.jwtService.signAsync(payload),
     };
   }
 }
